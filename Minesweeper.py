@@ -9,19 +9,16 @@ def initialize_variables():
     global width, height, MINE_COUNT, BOARD_SIZE, TILE_COUNT, MULTIPLYER, CLICKS
     global timer, gameover, win, gameTiles, mineNumber, mineMap, clicked
     width, height = 500, 550
-    win = 0
+    win = -1
     BOARD_SIZE = 10
 
-class SampleApp(tk.Tk):
+
+class MinesweeperApp(tk.Tk):
 
     def __init__(self, *args, **kwargs):
         tk.Tk.__init__(self, *args, **kwargs)
-        self.geometry(str(width) + "x" + str(height) + "+200+200")
         self.title_font = tkfont.Font(family='Helvetica', size=18, weight="bold", slant="italic")
 
-        # the container is where we'll stack a bunch of frames
-        # on top of each other, then the one we want visible
-        # will be raised above the others
         container = tk.Frame(self)
         container.pack(side="top", fill="both", expand=True)
         container.grid_rowconfigure(0, weight=1)
@@ -32,10 +29,6 @@ class SampleApp(tk.Tk):
             page_name = F.__name__
             frame = F(parent=container, controller=self)
             self.frames[page_name] = frame
-
-            # put all of the pages in the same location;
-            # the one on the top of the stacking order
-            # will be the one that is visible.
             frame.grid(row=0, column=0, sticky="nsew")
 
         self.show_frame("StartPage", 0, 0)
@@ -92,7 +85,9 @@ class GameBoard(tk.Frame):
     def start_game(self, mine_count, board_size):
         global width, height, MINE_COUNT, BOARD_SIZE, TILE_COUNT, MULTIPLYER, CLICKS, TOP_SCORES, flagmode_button, name_entry
         global timer, gameover, win, gameTiles, mineNumber, mineMap, clicked, timer_label, FLAG_MODE, player_name
+        global photo
 
+        photo = PhotoImage(file='mine.png')
         timer = 0
         gameover = False
         win = -1
@@ -118,6 +113,7 @@ class GameBoard(tk.Frame):
         flagmode_button = Button(self, text='Flag Mode Off', command=lambda: self.change_flagmode())
         flagmode_button.place(relx=.8, rely=.02, width=.20 * width)
 
+        # Create mines and place them in the 2D mineMap
         for mine in range(mine_count):
             while True:
                 tile = random.randint(0, TILE_COUNT - 1)
@@ -130,10 +126,11 @@ class GameBoard(tk.Frame):
             y = int(mine / board_size)
             mineMap.append([x, y])
 
+        # Place game tiles
         for x in range(board_size):
             gameTiles.append([])
             for y in range(board_size):
-                gameTiles[x].append(Button(self, command=(lambda i=x, j=y: [self.reveal_tile(i, j), self.check_clicked(i, j)])))
+                gameTiles[x].append(Button(self, command=(lambda i=x, j=y: self.reveal_tile(i, j))))
                 gameTiles[x][y].place(relx=TILE_RELX_POS*x, rely=0.09 + TILE_RELY_POS*y,
                                       width=MULTIPLYER, height=MULTIPLYER)
 
@@ -141,17 +138,10 @@ class GameBoard(tk.Frame):
         global FLAG_MODE, flagmode_button
         if FLAG_MODE:
             FLAG_MODE = False
-            flagmode_button.config(text="Flag Mode Off")
+            flagmode_button.config(text="Flag Mode Off", bg='SystemButtonFace')
         else:
             FLAG_MODE = True
-            flagmode_button.config(text="Flag Mode On")
-
-    def check_clicked(self, x, y):
-        if len(clicked) == BOARD_SIZE * BOARD_SIZE - MINE_COUNT:
-            global gameover
-            global win
-            win = 1
-
+            flagmode_button.config(text="Flag Mode On", bg='blue')
 
     def update_clock(self):
         global timer_label, name_entry, player_name
@@ -159,23 +149,25 @@ class GameBoard(tk.Frame):
         global gameover
 
         if not gameover:
+
+            # Check if the game is won
             count = 0
             for columns in gameTiles:
                 for tile in columns:
                     if tile.cget('text') != '':
                         count += 1
-            print(count)
             if count == BOARD_SIZE * BOARD_SIZE - MINE_COUNT:
                 gameover = True
+                win = 1
+
+            # Increment timer (player score)
             timer += 1
             timer_label.configure(text="Score: " + str(timer))
+
             self.after(1000, self.update_clock)
         else:
-            print('You WON')
-            win = 1
             player_name = name_entry.get()
-            self.after(1000, self.controller.show_frame("HighScore", 0, 0))
-
+            self.after(2000, self.controller.show_frame("HighScore", 0, 0))
 
     def get_count(self, x, y):
         count = 0
@@ -315,8 +307,10 @@ class GameBoard(tk.Frame):
                 gameTiles[x + 1][y + 1].config(text=str(self.get_count(x + 1, y + 1)))
 
     def reveal_tile(self, x, y):
+        # First click begins timer
         if len(clicked) == 0:
             self.update_clock()
+
         if [x, y] in mineMap:
             global gameover
             global win
@@ -328,12 +322,11 @@ class GameBoard(tk.Frame):
             else:
                 gameover = True
                 win = 0
-                gameTiles[x][y].config(text='M')
-                self.controller.show_frame("HighScore", 0, 0)
+                gameTiles[x][y].config(image=photo)
         else:
-            count = self.get_count(x, y)
             if [x, y] not in clicked:
                 clicked.append([x, y])
+
             if FLAG_MODE:
                 if gameTiles[x][y].cget('bg') != 'SystemButtonFace':
                     gameTiles[x][y].config(text='', bg='SystemButtonFace')
@@ -342,10 +335,10 @@ class GameBoard(tk.Frame):
             else:
                 if gameTiles[x][y].cget('bg') != 'SystemButtonFace':
                     gameTiles[x][y].config(text='', bg='SystemButtonFace')
-                if count != 0:
-                    gameTiles[x][y].config(text=str(count))
+                if self.get_count(x, y) != 0:
+                    gameTiles[x][y].config(text=str(self.get_count(x, y)))
                 else:
-                    gameTiles[x][y].config(text=str(count), bg='grey')
+                    gameTiles[x][y].config(text=str(self.get_count(x, y)), bg='grey')
                     self.set_zeros(x, y)
 
 
@@ -370,7 +363,7 @@ class HighScore(tk.Frame):
             winlose_title.config(text="")
         win = -1
 
-        highscore_title = tk.Label(self, text="High Scores", font=self.controller.title_font)
+        highscore_title = tk.Label(self, text="High Scores", font=('Helvetica', 25))
         highscore_title.place(relx=.25, rely=.25, width=.5 * width)
 
         TOP_SCORES = self.get_top_scores()
@@ -416,9 +409,10 @@ class HighScore(tk.Frame):
                   (player_name, timer, BOARD_SIZE))
         conn.commit()
 
+
 if __name__ == "__main__":
     initialize_variables()
-    app = SampleApp()
+    app = MinesweeperApp()
     app.mainloop()
 
 
